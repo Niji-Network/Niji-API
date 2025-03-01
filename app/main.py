@@ -60,9 +60,9 @@ app.add_middleware(
 # - Status endpoint (e.g., for resource consumption).
 app.include_router(stats.router, prefix="/v1")
 # - Authentication endpoints.
-app.include_router(auth.router, prefix="/v1")
+app.include_router(auth.router, prefix="/v1/auth")
 # - Image endpoints; using versioned API prefix (e.g., /v1).
-app.include_router(images.router, prefix="/v1")
+app.include_router(images.router, prefix="/v1/img")
 
 # Note:
 # This setup provides a custom /docs endpoint (using ReDoc with your favicon),
