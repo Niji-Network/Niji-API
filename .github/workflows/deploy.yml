@@ -21,4 +21,4 @@ jobs:
           port: 22
           script: |
             cd /home/debian/Niji-API
-            git pull
+            git pull origin main

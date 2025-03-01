@@ -5,7 +5,7 @@ module.exports = {
       script: "bash",
       args: [
         "-c",
-        ".venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 7000 --workers 4"
+        "env/bin/uvicorn app.main:app --host 0.0.0.0 --port 7000 --workers 4"
       ],
       interpreter: "none",
       exec_mode: "fork",
