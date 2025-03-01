@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+motor
+requests
+redis
+pydantic-settings
+jinja2
+psutil
