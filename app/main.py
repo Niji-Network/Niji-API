@@ -35,11 +35,9 @@ async def redoc_docs():
 @app.get("/favicon.ico", include_in_schema=False)
 async def custom_favicon():
     """
-    Serves the favicon from the static folder.
+    Serves the favicon from the static folder defined in STATIC_IMAGES_DIR.
     """
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    # Construct the absolute path to the favicon file.
-    favicon_path = os.path.join(base_dir, "..", "static", "favicon.ico")
+    favicon_path = os.path.join(settings.STATIC_IMAGES_DIR, "favicon.ico")
     return FileResponse(favicon_path)
 
 # Initialize MongoDB client using connection string from settings.
