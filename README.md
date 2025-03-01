@@ -1,5 +1,4 @@
 <div align="center">
-    <img src="/static/favicon.ico" alt="logo" width="300" height="300">
     <h1>Niji - Anime related API</h1>
 </div>
 
