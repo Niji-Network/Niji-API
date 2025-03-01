@@ -296,7 +296,7 @@ async def post_image(
     except HTTPException as e:
         raise e
 
-    image_dict["url"] = settings.CDN_DOMAIN.rstrip("/") + local_url.replace("/static", "/images")
+    image_dict["url"] = settings.CDN_DOMAIN.rstrip("/") + "/images/" + local_url.replace("/static", "")
     result = await collection.insert_one(image_dict)
     if result.inserted_id:
         image_dict["_id"] = result.inserted_id
