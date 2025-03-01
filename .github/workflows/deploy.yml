@@ -20,5 +20,5 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           port: 22
           script: |
-            cd /home/debian/Niji-API
+            cd /home/ubuntu/Niji-API
             git pull origin main
