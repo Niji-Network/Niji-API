@@ -3,7 +3,7 @@ services:
   nijiapi:
     build: .
     ports:
-      - "8000:8000"
+      - "7000:7000"
     environment:
       - MONGO_URI=${MONGO_URI}
       - DB_NAME=${DB_NAME}
