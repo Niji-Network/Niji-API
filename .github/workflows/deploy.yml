@@ -2,7 +2,7 @@ name: Deploy to VPS
 
 on:
   push:
-    branches: [ masyer ]
+    branches: [ main ]
 
 jobs:
   deploy:
