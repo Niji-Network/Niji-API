@@ -1,21 +1,9 @@
 from fastapi import HTTPException, Request, status
-from app.exceptions import APIKeyException  # Custom exception for API key errors
+from app.exceptions import APIKeyException
 from app.config import settings
 
 
 async def verify_api_key(request: Request) -> dict:
-    """
-    Verifies that the request contains a valid API key in the 'X-API-KEY' header.
-
-    This function checks for the API key in the request headers and queries the MongoDB
-    collection (specified in settings.API_KEYS_COLLECTION) to validate it.
-
-    Returns:
-        dict: The API key document if the API key is valid.
-
-    Raises:
-        HTTPException: With status 401 if the API key is missing or invalid.
-    """
     api_key = request.headers.get("X-API-KEY")
     if not api_key:
         raise HTTPException(

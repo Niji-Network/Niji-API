@@ -1,6 +1,10 @@
-from fastapi import APIRouter, Request, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, Request, Depends, status
+from app.exceptions import UserNotAuthorizedException
 from app.utils.security import verify_api_key
+from app.utils.rate_limiter import rate_limit
+from app.utils.helpers import is_authorized
 from app.config import settings
+import asyncio
 import psutil
 import time
 import os
@@ -9,75 +13,49 @@ router = APIRouter()
 
 @router.get(
     "/stats",
-    summary="Retrieve application consumption and system statistics as JSON",
+    summary="Retrieve system metrics and global statistics",
     tags=["Status"]
 )
+@rate_limit
 async def get_status(request: Request, user: dict = Depends(verify_api_key)):
-    """
-    Retrieves the current resource consumption and system statistics, including:
-      - CPU usage (percentage over a 1-second interval)
-      - CPU count (number of cores)
-      - Load average (1, 5, 15 minutes; if available)
-      - Memory usage (total and used in MB, and percentage)
-      - Disk usage for the root filesystem (total, used, free in GB, and percentage)
-      - Process count (number of active processes)
-      - Current timestamp
-
-    This endpoint is restricted to authorized users (those allowed to post images).
-
-    **Returns:**
-      A JSON object with keys:
-        - cpu_usage
-        - cpu_count
-        - load_average (list of floats or an empty list if not available)
-        - total_memory (in MB)
-        - used_memory (in MB)
-        - memory_percent
-        - disk_total (in GB)
-        - disk_used (in GB)
-        - disk_free (in GB)
-        - disk_percent
-        - process_count
-        - timestamp
-
-    **Raises:**
-      - HTTPException (403) if the user is not authorized.
-      - HTTPException (500) if there is an error retrieving system metrics.
-    """
-    # Ensure the user is authorized to access status.
-    if user["username"] not in settings.ALLOWED_POST_USERS:
+    if not is_authorized(user, "admin"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="User is not authorized to access status."
+            detail=str(UserNotAuthorizedException("User is not authorized to get statistics."))
         )
-
     try:
-        # CPU metrics
         cpu_usage = psutil.cpu_percent(interval=1)
         cpu_count = psutil.cpu_count(logical=True)
-
-        # Load average (available on Unix systems)
+        cpu_freq = psutil.cpu_freq()
+        cpu_frequency = {
+            "current": cpu_freq.current if cpu_freq else None,
+            "min": cpu_freq.min if cpu_freq else None,
+            "max": cpu_freq.max if cpu_freq else None
+        }
         try:
-            load_avg = os.getloadavg()  # Returns a tuple: (1-min, 5-min, 15-min)
-            load_average = list(load_avg)
+            load_average = list(os.getloadavg())
         except (AttributeError, OSError):
             load_average = []
-
-        # Memory metrics in MB
         memory = psutil.virtual_memory()
         total_memory = round(memory.total / (1024 * 1024), 2)
         used_memory = round(memory.used / (1024 * 1024), 2)
         memory_percent = memory.percent
-
-        # Disk usage metrics for root directory (in GB)
         disk = psutil.disk_usage("/")
         disk_total = round(disk.total / (1024**3), 2)
         disk_used = round(disk.used / (1024**3), 2)
         disk_free = round(disk.free / (1024**3), 2)
         disk_percent = disk.percent
-
-        # Number of processes
         process_count = len(psutil.pids())
+        net_io = psutil.net_io_counters()
+        net_io_data = {"bytes_sent": net_io.bytes_sent, "bytes_recv": net_io.bytes_recv}
+
+        db = request.app.state.db
+        total_users_future = db[settings.API_KEYS_COLLECTION].count_documents({})
+        total_images_future = db[settings.IMAGES_COLLECTION].count_documents({})
+        total_users, total_images = await asyncio.gather(total_users_future, total_images_future)
+
+        stats_doc = await db["stats"].find_one({"_id": "global"})
+        total_requests = stats_doc.get("totalRequests", 0) if stats_doc else 0
 
     except Exception as e:
         raise HTTPException(
@@ -88,6 +66,7 @@ async def get_status(request: Request, user: dict = Depends(verify_api_key)):
     return {
         "cpu_usage": cpu_usage,
         "cpu_count": cpu_count,
+        "cpu_frequency": cpu_frequency,
         "load_average": load_average,
         "total_memory": total_memory,
         "used_memory": used_memory,
@@ -97,5 +76,11 @@ async def get_status(request: Request, user: dict = Depends(verify_api_key)):
         "disk_free": disk_free,
         "disk_percent": disk_percent,
         "process_count": process_count,
+        "net_io": net_io_data,
+        "globalStats": {
+            "totalRequests": total_requests,
+            "totalUsers": total_users,
+            "totalImages": total_images
+        },
         "timestamp": time.time()
     }

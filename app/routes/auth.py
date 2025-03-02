@@ -6,27 +6,29 @@ import secrets
 router = APIRouter()
 
 
-@router.post("/create-key", response_model=APIKeyResponse, summary="Create a new API key for a user", tags=["Authentication"])
+@router.post(
+    "/create-key",
+    response_model=APIKeyResponse,
+    summary="Create a new API key for a user",
+    tags=["Authentication"]
+)
 async def create_api_key(
-        request: Request,
-        username: str = Query(..., description="Unique username for API key generation")
+    request: Request,
+    username: str = Query(
+        ...,
+        description="Unique username for API key generation (max 16 characters)",
+        max_length=16
+    )
 ):
-    """
-    Creates a new API key for the specified username.
+    if len(request.query_params) != 1 or "username" not in request.query_params:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only the 'username' query parameter is allowed."
+        )
 
-    **Parameters:**
-      - **username**: The unique username for which to generate an API key.
-
-    **Raises:**
-      - HTTPException (400): If the username already exists.
-
-    **Returns:**
-      A JSON document with the username and the generated API key.
-    """
     db = request.app.state.db
     collection = db[settings.API_KEYS_COLLECTION]
 
-    # Check if the username already exists in the database.
     existing = await collection.find_one({"username": username})
     if existing:
         raise HTTPException(
@@ -34,12 +36,14 @@ async def create_api_key(
             detail="Username already exists."
         )
 
-    # Generate a secure, random API key.
     api_key = secrets.token_hex(16)
-    document = {"username": username, "api_key": api_key}
+    document = {"username": username, "api_key": api_key, "role": "user"}
 
-    # Insert the new API key document into the database.
     await collection.insert_one(document)
+    await db["stats"].update_one(
+        {"_id": "global"},
+        {"$inc": {"totalUsers": 1}},
+        upsert=True
+    )
 
-    # Return the username and API key as JSON.
-    return {"username": username, "api_key": api_key}
+    return {"username": username, "api_key": api_key, "role": "user"}

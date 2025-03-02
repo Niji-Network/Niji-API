@@ -1,10 +1,4 @@
 class APIKeyException(Exception):
-    """
-    Exception raised when the API key is missing or invalid.
-
-    Attributes:
-        message (str): A description of the error.
-    """
     def __init__(self, message: str = "Invalid or missing API key") -> None:
         super().__init__(message)
         self.message = message
@@ -14,12 +8,6 @@ class APIKeyException(Exception):
 
 
 class ImageNotFoundException(Exception):
-    """
-    Exception raised when the requested image cannot be found.
-
-    Attributes:
-        message (str): A description of the error.
-    """
     def __init__(self, message: str = "Image not found") -> None:
         super().__init__(message)
         self.message = message
@@ -29,15 +17,18 @@ class ImageNotFoundException(Exception):
 
 
 class RateLimitExceededException(Exception):
-    """
-    Exception raised when the rate limit for requests is exceeded.
-
-    Attributes:
-        message (str): A description of the error.
-    """
     def __init__(self, message: str = "Rate limit exceeded") -> None:
         super().__init__(message)
         self.message = message
 
     def __str__(self) -> str:
         return f"RateLimitExceededException: {self.message}"
+
+
+class UserNotAuthorizedException(Exception):
+    def __init__(self, message: str = "User does not have the required permissions") -> None:
+        super().__init__(message)
+        self.message = message
+
+    def __str__(self) -> str:
+        return f"UserNotAuthorizedException: {self.message}"

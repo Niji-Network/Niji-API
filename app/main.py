@@ -1,13 +1,16 @@
 from motor.motor_asyncio import AsyncIOMotorClient
-from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_redoc_html
 from fastapi.responses import FileResponse
 from app.routes import auth, images, stats
+from fastapi import FastAPI, Request
 from app.config import settings
+import yaml
 import os
 
-# Initialize FastAPI application with custom configuration.
+if not os.path.exists("docs"):
+    os.makedirs("docs")
+
 app = FastAPI(
     title="Niji API | Anime related API",
     description=(
@@ -15,37 +18,58 @@ app = FastAPI(
         "saving them locally, and provides endpoints for image management."
     ),
     version="1.0.0",
-    redoc_url=None,  # Disable default ReDoc endpoint (we use a custom one)
-    docs_url=None,   # Disable default Swagger UI endpoint
+    redoc_url=None,
+    docs_url=None,
 )
 
-# Custom ReDoc endpoint with a custom favicon.
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    openapi_schema = app.openapi()
+    # Write the OpenAPI schema to a YAML file in the "docs" directory.
+    openapi_yaml_path = os.path.join("docs", "openapi.yaml")
+    with open(openapi_yaml_path, "w") as yaml_file:
+        yaml.dump(openapi_schema, yaml_file, sort_keys=False, allow_unicode=True)
+
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
+
+@app.get("/openapi.yaml", include_in_schema=False)
+async def get_openapi_yaml():
+    openapi_yaml_path = os.path.join("docs", "openapi.yaml")
+    return FileResponse(openapi_yaml_path, media_type="application/x-yaml")
+
 @app.get("/docs", include_in_schema=False)
 async def redoc_docs():
-    """
-    Returns the custom ReDoc HTML documentation with a custom favicon.
-    """
     return get_redoc_html(
-        openapi_url="/openapi.json",
+        openapi_url="/openapi.yaml",
         title="Niji | Anime related API",
-        redoc_favicon_url="/favicon.ico"  # Uses an absolute URL for the favicon.
+        redoc_favicon_url="/favicon.ico"
     )
 
-# Endpoint to serve the favicon.
+# Serve favicon from the STATIC_IMAGES_DIR.
 @app.get("/favicon.ico", include_in_schema=False)
 async def custom_favicon():
-    """
-    Serves the favicon from the static folder defined in STATIC_IMAGES_DIR.
-    """
     favicon_path = os.path.join(settings.STATIC_IMAGES_DIR, "favicon.ico")
     return FileResponse(favicon_path)
 
-# Initialize MongoDB client using connection string from settings.
 client = AsyncIOMotorClient(settings.MONGO_URI)
-# Store the database instance in app.state for global access.
 app.state.db = client[settings.DB_NAME]
 
-# Add CORS middleware to allow cross-origin requests.
+@app.middleware("http")
+async def count_requests(request: Request, call_next):
+    db = request.app.state.db
+    await db["stats"].update_one(
+        {"_id": "global"},
+        {"$inc": {"totalRequests": 1}},
+        upsert=True
+    )
+    response = await call_next(request)
+    return response
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -54,15 +78,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers for modular endpoints.
-# - Status endpoint (e.g., for resource consumption).
 app.include_router(stats.router, prefix="/v1")
-# - Authentication endpoints.
 app.include_router(auth.router, prefix="/v1/auth")
-# - Image endpoints; using versioned API prefix (e.g., /v1).
 app.include_router(images.router, prefix="/v1/img")
-
-# Note:
-# This setup provides a custom /docs endpoint (using ReDoc with your favicon),
-# initializes MongoDB using environment settings, adds global CORS settings,
-# and includes modular routers for authentication, image management, and status.
