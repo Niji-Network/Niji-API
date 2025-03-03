@@ -1,6 +1,6 @@
 <div align="center">
     <h1>Niji - Anime Related API</h1>
-    <img src="/docs/favicon.ico" alt="Logo" width="150">
+    <img src="https://nijii.xyz/logo.png" alt="Logo" width="150">
 </div>
 
 ## Overview
