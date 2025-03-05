@@ -36,8 +36,9 @@ async def retrieve_images(
 )
 @rate_limit
 async def search_images(
-    nsfw: bool = Query(False, description="Filter for NSFW images"),
-    character: str = Query(None, description="Filter by character name"),
+    request: Request,
+    is_nsfw: bool = Query(False, description="Filter for NSFW images"),
+    characters: str = Query(None, description="Filter by character name"),
     tags: str = Query(None, description="Comma-separated list of tags"),
     anime: str = Query(None, description="Filter by anime name"),
     category: str = Query(None, description="Filter by image category"),
@@ -46,12 +47,12 @@ async def search_images(
     user: dict = Depends(verify_api_key),
     collection = Depends(get_images_collection)
 ) -> dict:
-    if not (nsfw or category or character or anime or (tags and tags.strip())):
+    if not (is_nsfw or category or (characters and characters.strip()) or anime or (tags and tags.strip())):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="At least one filter must be provided for searching."
         )
-    q = build_query(category=category, nsfw=nsfw, character=character, anime=anime, tags=tags)
+    q = build_query(category=category, nsfw=is_nsfw, character=characters, anime=anime, tags=tags)
     return await retrieve_images(collection, q, page, size, "No images found with given filters.")
 
 @router.get(
@@ -61,6 +62,7 @@ async def search_images(
 )
 @rate_limit
 async def get_images_by_category(
+    request: Request,
     category: str = Path(..., description="Category to filter images"),
     page: int = Query(1, ge=1, description="Page number"),
     size: int = Query(5, ge=1, description="Number of images per page"),
@@ -76,8 +78,9 @@ async def get_images_by_category(
 @router.get("/random", summary="Retrieve a random image with optional filters", tags=["Images"])
 @rate_limit
 async def get_random(
-    nsfw: bool = Query(False, description="Filter for NSFW images"),
-    character: str = Query(None, description="Filter by character name"),
+    request: Request,
+    is_nsfw: bool = Query(False, description="Filter for NSFW images"),
+    characters: str = Query(None, description="Filter by character name"),
     tags: str = Query(None, description="Comma-separated list of tags"),
     page: int = Query(1, ge=1, description="Page number"),
     size: int = Query(5, ge=1, description="Number of images per page"),
@@ -85,10 +88,12 @@ async def get_random(
     collection = Depends(get_images_collection)
 ) -> dict:
     q = {}
-    if nsfw:
+    if is_nsfw:
         q["nsfw"] = True
-    if character:
-        q["character"] = character
+    if characters:
+        character_list = [character.strip() for character in characters.split(",") if character.strip()]
+        if character_list:
+            q["characters"] = {"$in": character_list}
     if tags:
         tag_list = [tag.strip() for tag in tags.split(",") if tag.strip()]
         if tag_list:
@@ -103,12 +108,6 @@ async def post_image(
         user: dict = Depends(verify_api_key),
         collection=Depends(get_images_collection)
 ) -> dict:
-    if not is_authorized(user, "team"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(UserNotAuthorizedException("User is not authorized to post images."))
-        )
-
     image_data = image.model_dump()
     category = image_data.get("category")
     if not category:
@@ -141,6 +140,7 @@ async def post_image(
 @router.put("/{image_id}", summary="Update an existing image", tags=["Images"])
 @rate_limit
 async def update_image(
+    request: Request,
     image_update: ImageUpdate,
     image_id: str = Path(..., description="The MongoDB ObjectId of the image to update."),
     user: dict = Depends(verify_api_key),
@@ -175,6 +175,7 @@ async def update_image(
 @router.delete("/{image_id}", summary="Delete an existing image", tags=["Images"])
 @rate_limit
 async def delete_image(
+    request: Request,
     image_id: str = Path(..., description="The MongoDB ObjectId (as a string) of the image to delete."),
     user: dict = Depends(verify_api_key),
     collection = Depends(get_images_collection)
