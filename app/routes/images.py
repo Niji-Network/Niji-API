@@ -75,30 +75,46 @@ async def get_images_by_category(
         raise HTTPException(status_code=404, detail=f"No images found for category '{category}'.")
     return await get_paginated_results(collection, query, page, size)
 
-@router.get("/random", summary="Retrieve a random image with optional filters", tags=["Images"])
+@router.get("/random", summary="Retrieve a random image from each category with optional filters", tags=["Images"])
 @rate_limit
 async def get_random(
-    request: Request,
-    is_nsfw: bool = Query(False, description="Filter for NSFW images"),
-    characters: str = Query(None, description="Filter by character name"),
-    tags: str = Query(None, description="Comma-separated list of tags"),
-    page: int = Query(1, ge=1, description="Page number"),
-    size: int = Query(5, ge=1, description="Number of images per page"),
-    user: dict = Depends(verify_api_key),
-    collection = Depends(get_images_collection)
+        request: Request,
+        is_nsfw: bool = Query(False, description="Filter for NSFW images"),
+        characters: str = Query(None, description="Filter by character name"),
+        tags: str = Query(None, description="Comma-separated list of tags"),
+        user: dict = Depends(verify_api_key),
+        db=Depends(get_db)
 ) -> dict:
-    q = {}
+    filter_query = {}
     if is_nsfw:
-        q["nsfw"] = True
+        filter_query["nsfw"] = True
     if characters:
-        character_list = [character.strip() for character in characters.split(",") if character.strip()]
+        character_list = [c.strip() for c in characters.split(",") if c.strip()]
         if character_list:
-            q["characters"] = {"$in": character_list}
+            filter_query["characters"] = {"$in": character_list}
     if tags:
-        tag_list = [tag.strip() for tag in tags.split(",") if tag.strip()]
+        tag_list = [t.strip() for t in tags.split(",") if t.strip()]
         if tag_list:
-            q["tags"] = {"$in": tag_list}
-    return await retrieve_images(collection, q, page, size, "No images found with given filters.")
+            filter_query["tags"] = {"$in": tag_list}
+
+    collection = db[settings.IMAGES_COLLECTION]
+    categories = await collection.distinct("category", filter_query)
+    if not categories:
+        raise HTTPException(status_code=404, detail="No images found with given filters.")
+
+    random_images = []
+    for cat in categories:
+        cat_filter = {**filter_query, "category": cat}
+        pipeline = [{"$match": cat_filter}, {"$sample": {"size": 1}}]
+        cursor = collection.aggregate(pipeline)
+        docs = await cursor.to_list(length=1)
+        if docs:
+            random_images.append(fix_mongo_document(docs[0]))
+
+    if not random_images:
+        raise HTTPException(status_code=404, detail="No images found with given filters.")
+
+    return {"images": random_images}
 
 @router.post("/", summary="Post a new image", tags=["Images"])
 @rate_limit
