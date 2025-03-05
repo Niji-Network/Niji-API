@@ -23,6 +23,7 @@ async def get_status(request: Request, user: dict = Depends(verify_api_key)):
             status_code=status.HTTP_403_FORBIDDEN,
             detail=str(UserNotAuthorizedException("User is not authorized to get statistics."))
         )
+
     try:
         cpu_usage = psutil.cpu_percent(interval=1)
         cpu_count = psutil.cpu_count(logical=True)
@@ -32,22 +33,28 @@ async def get_status(request: Request, user: dict = Depends(verify_api_key)):
             "min": cpu_freq.min if cpu_freq else None,
             "max": cpu_freq.max if cpu_freq else None
         }
+
         try:
             load_average = list(os.getloadavg())
         except (AttributeError, OSError):
             load_average = []
+
         memory = psutil.virtual_memory()
         total_memory = round(memory.total / (1024 * 1024), 2)
         used_memory = round(memory.used / (1024 * 1024), 2)
         memory_percent = memory.percent
+
         disk = psutil.disk_usage("/")
-        disk_total = round(disk.total / (1024**3), 2)
-        disk_used = round(disk.used / (1024**3), 2)
-        disk_free = round(disk.free / (1024**3), 2)
+        disk_total = round(disk.total / (1024 ** 3), 2)
+        disk_used = round(disk.used / (1024 ** 3), 2)
+        disk_free = round(disk.free / (1024 ** 3), 2)
         disk_percent = disk.percent
+
         process_count = len(psutil.pids())
         net_io = psutil.net_io_counters()
         net_io_data = {"bytes_sent": net_io.bytes_sent, "bytes_recv": net_io.bytes_recv}
+
+        uptime_seconds = time.time() - psutil.Process().create_time()
 
         db = request.app.state.db
         total_users_future = db[settings.API_KEYS_COLLECTION].count_documents({})
@@ -82,5 +89,6 @@ async def get_status(request: Request, user: dict = Depends(verify_api_key)):
             "totalUsers": total_users,
             "totalImages": total_images
         },
-        "timestamp": time.time()
+        "timestamp": time.time(),
+        "uptime": uptime_seconds
     }
