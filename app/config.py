@@ -11,8 +11,6 @@ class Settings(BaseSettings):
     STATIC_IMAGES_DIR: str = "static/images"
     API_KEYS_COLLECTION: str
 
-    # Configuration for pydantic-settings: load environment variables from .env.
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
-# Instantiate the settings so that they can be imported throughout the app.
 settings = Settings()
