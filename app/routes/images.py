@@ -5,12 +5,15 @@ from app.models import ImageCreate, ImageUpdate
 from app.utils.security import verify_api_key
 from app.utils.rate_limiter import rate_limit
 from app.utils.cdn import save_image_locally
+from nudenet import NudeDetector
 from app.config import settings
 from bson import ObjectId
 import asyncio
 import os
 
 router = APIRouter()
+
+detector = NudeDetector()
 
 def get_db(request: Request):
     return request.app.state.db
@@ -95,28 +98,44 @@ async def get_random(
 @router.post("/", summary="Post a new image", tags=["Images"])
 @rate_limit
 async def post_image(
-    image: ImageCreate,
-    user: dict = Depends(verify_api_key),
-    collection = Depends(get_images_collection)
+        request: Request,
+        image: ImageCreate,
+        user: dict = Depends(verify_api_key),
+        collection=Depends(get_images_collection)
 ) -> dict:
     if not is_authorized(user, "team"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=str(UserNotAuthorizedException("User is not authorized to post images."))
         )
+
     image_data = image.model_dump()
     category = image_data.get("category")
     if not category:
         raise HTTPException(status_code=400, detail="Category is required.")
+
     try:
         local_url = save_image_locally(str(image_data["url"]), category)
     except HTTPException as e:
         raise e
+
+    file_path = os.path.join(os.getcwd(), settings.STATIC_IMAGES_DIR, local_url.lstrip("/"))
+
+    try:
+        detections = detector.detect(file_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error classifying image: {e}")
+
+    is_nsfw = any(d.get("confidence", 0) > 0.5 for d in detections)
+    image_data["is_nsfw"] = is_nsfw
+
     image_data["url"] = settings.CDN_DOMAIN.rstrip("/") + "/images" + local_url.replace("/static", "")
-    result = await collection.insert_one(image_data)
-    if result.inserted_id:
-        image_data["_id"] = result.inserted_id
+
+    result_db = await collection.insert_one(image_data)
+    if result_db.inserted_id:
+        image_data["_id"] = result_db.inserted_id
         return {"detail": "Image added successfully.", "image": fix_mongo_document(image_data)}
+
     raise HTTPException(status_code=500, detail="Error inserting the image into the database.")
 
 @router.put("/{image_id}", summary="Update an existing image", tags=["Images"])

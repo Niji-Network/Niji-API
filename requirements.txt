@@ -6,3 +6,4 @@ redis
 pydantic-settings
 jinja2
 psutil
+nudenet
