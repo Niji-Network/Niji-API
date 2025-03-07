@@ -22,3 +22,8 @@ jobs:
           script: |
             cd /home/gonzyui/Niji-API
             git pull origin main
+            pm2 delete nijiapi redis
+            source venv/bin/activate
+            pip install -r requirements.txt
+            pm2 start ecosystem.config.js
+            pm2 save
