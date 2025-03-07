@@ -5,10 +5,10 @@ module.exports = {
       script: "bash",
       args: [
         "-c",
-        "env/bin/uvicorn app.main:app --host 0.0.0.0 --port 7000 --workers 4"
+        "venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 7000 --workers 4"
       ],
       interpreter: "none",
-      cwd: "/home/ubuntu/Niji-API",
+      cwd: "/home/gonzyui/Niji-API",
       exec_mode: "fork",
       instances: 1,
       max_memory_restart: "4G",
@@ -17,6 +17,7 @@ module.exports = {
     {
       name: "redis",
       script: "redis-server",
+      args: ["--daemonize", "no"],
       interpreter: "none",
     }
   ],
